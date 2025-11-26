@@ -2,6 +2,7 @@ package com.postventa.dao;
 
 import com.postventa.config.DatabaseConfig;
 import com.postventa.model.Usuario;
+import com.postventa.util.PasswordUtil;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -14,23 +15,48 @@ public class UsuarioDAO {
 
     /**
      * Autentica un usuario por username y password
+     * Soporta contraseñas hasheadas y contraseñas legacy (texto plano)
      */
     public Usuario autenticar(String username, String password) {
-        String sql = "SELECT * FROM usuarios WHERE username = ? AND password = ? AND activo = true";
+        String sql = "SELECT * FROM usuarios WHERE username = ? AND activo = true";
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, username);
-            stmt.setString(2, password);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 Usuario usuario = mapResultSet(rs);
-                actualizarUltimoAcceso(usuario.getId());
-                return usuario;
+                String storedPassword = usuario.getPassword();
+                
+                // Verificar contraseña (soporta hash y texto plano para migración)
+                if (PasswordUtil.verifyPassword(password, storedPassword)) {
+                    // Si la contraseña está en texto plano, migrarla a hash
+                    if (!PasswordUtil.isHashed(storedPassword)) {
+                        migratePasswordToHash(usuario.getId(), password);
+                    }
+                    actualizarUltimoAcceso(usuario.getId());
+                    return usuario;
+                }
             }
         } catch (SQLException e) {
             System.err.println("Error en autenticación: " + e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Migra una contraseña de texto plano a hash
+     */
+    private void migratePasswordToHash(int userId, String plainPassword) {
+        String hashedPassword = PasswordUtil.hashPassword(plainPassword);
+        String sql = "UPDATE usuarios SET password = ? WHERE id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, hashedPassword);
+            stmt.setInt(2, userId);
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("Error al migrar contraseña: " + e.getMessage());
+        }
     }
 
     /**
@@ -70,14 +96,16 @@ public class UsuarioDAO {
     }
 
     /**
-     * Inserta un nuevo usuario
+     * Inserta un nuevo usuario con contraseña hasheada
      */
     public boolean insertar(Usuario usuario) {
         String sql = "INSERT INTO usuarios (username, password, nombre_completo, email, rol, activo) VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, usuario.getUsername());
-            stmt.setString(2, usuario.getPassword());
+            // Hashear la contraseña antes de guardar
+            String hashedPassword = PasswordUtil.hashPassword(usuario.getPassword());
+            stmt.setString(2, hashedPassword);
             stmt.setString(3, usuario.getNombreCompleto());
             stmt.setString(4, usuario.getEmail());
             stmt.setString(5, usuario.getRol());
@@ -98,13 +126,19 @@ public class UsuarioDAO {
 
     /**
      * Actualiza un usuario existente
+     * Si la contraseña no está hasheada, la hashea antes de guardar
      */
     public boolean actualizar(Usuario usuario) {
         String sql = "UPDATE usuarios SET username = ?, password = ?, nombre_completo = ?, email = ?, rol = ?, activo = ? WHERE id = ?";
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, usuario.getUsername());
-            stmt.setString(2, usuario.getPassword());
+            // Si la contraseña no está hasheada, hashearla
+            String password = usuario.getPassword();
+            if (!PasswordUtil.isHashed(password)) {
+                password = PasswordUtil.hashPassword(password);
+            }
+            stmt.setString(2, password);
             stmt.setString(3, usuario.getNombreCompleto());
             stmt.setString(4, usuario.getEmail());
             stmt.setString(5, usuario.getRol());

@@ -150,6 +150,8 @@ CREATE TABLE IF NOT EXISTS detalle_ventas (
 -- Datos iniciales
 -- =====================================================
 
+-- IMPORTANTE: La contraseña por defecto será hasheada automáticamente
+-- en el primer inicio de sesión. Cambie la contraseña después de la instalación.
 -- Usuario administrador por defecto (password: admin123)
 INSERT INTO usuarios (username, password, nombre_completo, email, rol) 
 VALUES ('admin', 'admin123', 'Administrador del Sistema', 'admin@empresa.com', 'ADMIN');
