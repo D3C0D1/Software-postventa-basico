@@ -6,7 +6,7 @@ Software postventa de productos con sistema completo de gestión comercial. Incl
 - **Dashboard** con estadísticas de ventas
 - **Gestión de productos** (CRUD completo)
 - **Gestión de clientes** (CRUD completo)
-- **Gestión de categorías** (CRUD completo)
+- **Gestión de proveedores** (CRUD completo)
 - **Registro de ventas** con facturación
 - **Configuración de empresa** para personalizar datos de facturación
 
